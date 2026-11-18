@@ -1,0 +1,4 @@
+[
+  {"eventTime": "2025-04-04 10:00:05", "clientId": "ghi789", "route": "/v1/cart", "httpMethod": "PUT", "durationMs": 140, "statusCode": 500},
+  {"eventTime": "2025-04-04 10:00:06", "clientId": "abc123", "route": "/v1/users", "httpMethod": "GET", "durationMs": 100, "statusCode": 200}
+]

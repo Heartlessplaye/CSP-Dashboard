@@ -1,0 +1,62 @@
+name: csp-traffic
+
+# Shared settings for services built from the runtime image.
+# HOST_UID/HOST_GID make files written to the bind mounts owned by you
+# (the Makefile exports them automatically).
+x-runtime: &runtime
+  build:
+    context: .
+    target: runtime
+  image: csp-traffic:latest
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  environment:
+    CSP_SETTINGS: /app/config/settings.yaml
+    CSP_LOG_LEVEL: ${CSP_LOG_LEVEL:-INFO}
+
+services:
+  processor:
+    <<: *runtime
+    command: ["python", "-m", "csp_traffic", "run"]
+    restart: unless-stopped
+    stop_grace_period: 20s
+    volumes:
+      - ./config:/app/config:ro
+      - ./plugins:/app/plugins:ro
+      - ./input:/app/input
+      - ./output:/app/output
+      - ./state:/app/state
+
+  dashboard:
+    <<: *runtime
+    command: ["uvicorn", "dashboard.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    environment:
+      CSP_OUTPUT_DIR: /app/output
+    ports:
+      - "${DASHBOARD_PORT:-8000}:8000"
+    volumes:
+      - ./output:/app/output:ro
+    depends_on:
+      - processor
+
+  # Synthetic traffic for all configured sources: `make demo`
+  loadgen:
+    <<: *runtime
+    profiles: ["demo"]
+    command: ["python", "tools/loadgen.py", "--input", "/app/input", "--rate", "${LOADGEN_RATE:-2000}", "--scenario", "${LOADGEN_SCENARIO:-evolve}"]
+    volumes:
+      - ./input:/app/input
+
+  # Test runner with the source tree bind-mounted: `make test`
+  test:
+    build:
+      context: .
+      target: dev
+    image: csp-traffic:dev
+    profiles: ["test"]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      HOME: /tmp
+    volumes:
+      - .:/app
+    command: ["pytest", "-q"]

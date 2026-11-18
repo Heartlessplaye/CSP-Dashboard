@@ -1,0 +1,7 @@
+{
+  "timestamp": "2025-04-04T10:00:01Z",
+  "requests": [
+    {"api_key": "abc123", "endpoint": "/v1/users", "method": "GET", "latency_ms": 120, "status": 200},
+    {"api_key": "xyz789", "endpoint": "/v1/orders", "method": "POST", "latency_ms": 250, "status": 201}
+  ]
+}

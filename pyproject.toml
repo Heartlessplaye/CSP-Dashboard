@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csp-traffic"
+version = "0.1.0"
+description = "Real-time API traffic insights and rate-limit monitoring for a cloud service provider"
+requires-python = ">=3.12"
+dynamic = ["dependencies", "optional-dependencies"]
+
+[project.scripts]
+csp-traffic = "csp_traffic.cli:main"
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+optional-dependencies.dev = { file = ["requirements-dev.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["csp_traffic*", "dashboard*"]
+
+[tool.setuptools.package-data]
+dashboard = ["static/*"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"

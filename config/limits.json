@@ -1,0 +1,8 @@
+{
+  "default": { "limit": 1000, "window_seconds": 3600 },
+  "clients": {
+    "abc123": { "limit": 5000 },
+    "xyz789": { "limit": 100, "window_seconds": 60 },
+    "internal-batch": { "limit": null }
+  }
+}

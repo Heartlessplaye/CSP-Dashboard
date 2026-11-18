@@ -1,0 +1,66 @@
+# How each source's log files are parsed and mapped to the internal record:
+#   timestamp, client_id, endpoint, method, latency_ms, status
+#
+# A source folder (input/<name>/) is matched by exact name, then by `match` glob.
+# Unmatched folders are auto-detected: parser from extension/content sniffing,
+# fields from the alias lists below. Fields not listed for a configured source
+# are also filled from the aliases.
+#
+# Field spec: either a dotted path ("client.key") or an object:
+#   { path, scale, type: str|int|float, default, format, tz }
+# Timestamp formats: auto (default) | iso | epoch_s | epoch_ms | epoch_us | epoch_ns | strptime pattern
+#
+# This file is hot-reloaded; no restart needed.
+
+defaults:
+  aliases:
+    timestamp:  [timestamp, ts, time, "@timestamp", event_time, eventTime, datetime]
+    client_id:  [client_id, api_key, apiKey, clientId, key, consumer, client]
+    endpoint:   [endpoint, path, route, uri, url]
+    method:     [method, http_method, httpMethod, verb]
+    latency_ms: [latency_ms, response_time_ms, duration_ms, durationMs, latency, elapsed_ms]
+    status:     [status, status_code, statusCode, http_status, code]
+
+sources:
+  EdgeServer:                       # JSON object; records under "requests"; ts on the envelope
+    match: "EdgeServer*"            # glob on folder name
+    parser: json
+    options: { records_path: requests, inherit: { timestamp: timestamp } }
+    fields: { client_id: api_key, endpoint: endpoint, method: method, latency_ms: latency_ms, status: status }
+
+  Microservice:                     # CSV, comma-delimited
+    parser: csv
+    options: { delimiter: "," }
+    fields: { client_id: client_id, latency_ms: response_time_ms, status: status_code }  # rest via aliases
+
+  APIGateway:                       # JSON lines; nested objects; epoch-ms ts; latency in seconds
+    parser: ndjson
+    fields:
+      timestamp:  { path: ts, format: epoch_ms }
+      client_id:  client.key
+      endpoint:   request.path
+      method:     request.verb
+      latency_ms: { path: response.duration_s, scale: 1000 }
+      status:     response.code
+
+  LoadBalancer:                     # CSV, ';'-delimited; epoch-seconds ts; different column names
+    parser: csv
+    options: { delimiter: ";" }
+    fields:
+      timestamp:  { path: event_time, format: epoch_s }
+      client_id:  apiKey
+      endpoint:   path
+      method:     http_method
+      latency_ms: latency
+      status:     http_status
+
+  MobileBackend:                    # top-level JSON array; camelCase; custom datetime string
+    parser: json
+    options: { records_path: "$" }
+    fields:
+      timestamp:  { path: eventTime, format: "%Y-%m-%d %H:%M:%S", tz: UTC }
+      client_id:  clientId
+      endpoint:   route
+      method:     httpMethod
+      latency_ms: durationMs
+      status:     statusCode

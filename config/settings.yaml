@@ -1,0 +1,29 @@
+# Processor settings. Relative paths are resolved from the working directory
+# (/app inside the containers).
+
+input_dir: input            # input/<sourceId>/<log files>
+output_dir: output          # output/<sourceId>/insights.json, output/_global/insights.json
+state_dir: state            # checkpoint.pkl
+sources_file: config/sources.yaml   # formats + field mappings (hot-reloaded)
+limits_file: config/limits.json     # rate limits (hot-reloaded)
+plugins_dir: plugins        # drop-in parser plugins (*.py), loaded at startup
+
+tick_seconds: 1.0           # how often insights files are refreshed
+reconcile_seconds: 2.0      # full directory rescan (safety net for missed inotify events)
+checkpoint_seconds: 5.0
+use_watchdog: true          # inotify-based change notifications
+
+workers: 0                  # parser processes; 0 = auto (min(4, CPUs)), 1 = inline (no pool)
+chunk_bytes: 8388608        # read size per chunk (8 MiB)
+max_bytes_per_task: 67108864  # cap per file per task (64 MiB) so one huge file can't starve others
+idle_flush_seconds: 3.0     # a trailing line without newline is parsed once the file is idle this long
+
+top_n_endpoints: 5
+timeseries_minutes: 60
+warning_ratio: 0.8          # rate-limit WARNING threshold (share of the limit)
+max_clients_in_output: 1000 # busiest clients listed per file (violators always included)
+error_sample_limit: 1000    # max rejected records written per source to output/_errors/
+max_future_seconds: 300     # records timestamped further in the future are rejected
+inactive_ttl_seconds: 86400 # archive outputs of sources whose folder disappeared this long ago
+
+ignore_patterns: [".*", "*.tmp", "*.part", "*.swp", "*~"]

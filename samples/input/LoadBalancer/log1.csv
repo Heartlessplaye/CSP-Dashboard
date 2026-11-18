@@ -1,0 +1,4 @@
+event_time;apiKey;path;http_method;latency;http_status
+1743760804;xyz789;/v1/users;GET;95;200
+1743760805;abc123;/v1/users;GET;105;200
+1743760806;ghi789;/v1/cart;PUT;130;503

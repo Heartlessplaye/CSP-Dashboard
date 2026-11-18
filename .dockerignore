@@ -1,0 +1,11 @@
+.git
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+input/*
+output/*
+state/*
+!input/.gitkeep
+!output/.gitkeep
+!state/.gitkeep
