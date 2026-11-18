@@ -25,9 +25,10 @@ from .config import (
 )
 from .formats import load_plugins
 from .metrics import SourceStats
-from .output import GLOBAL, ErrorSink, build_insights, iso, write_json_atomic
+from .output import GLOBAL, ErrorSink, build_insights, write_json_atomic
 from .ratelimit import RateLimiter
 from .state import load_checkpoint, save_checkpoint
+from .timefmt import TimeFormat
 from .tailer import FileResult, FileState, FileTask, process_file, worker_init
 from .watcher import DirWatcher, FileStat
 
@@ -59,6 +60,7 @@ class SourceState:
 class Engine:
     def __init__(self, settings: Settings) -> None:
         self.settings = s = settings
+        self.tf = TimeFormat("UTC")  # stored timestamps are always UTC; settings.timezone is display-only
         load_plugins(s.plugins_dir)
         self.sources_cfg: Reloadable[SourcesConfig] = Reloadable(s.sources_file, load_sources, SourcesConfig)
         self.limits_cfg: Reloadable[LimitsConfig] = Reloadable(s.limits_file, load_limits, LimitsConfig)
@@ -70,6 +72,7 @@ class Engine:
         self.stats: dict[str, SourceStats] = {}
         self.global_stats = SourceStats()
         self.limiter = RateLimiter(self.limits_cfg.value, s.warning_ratio)
+        self.limiter.tf = self.tf
         self.errors = ErrorSink(s.output_dir, s.error_sample_limit)
         self.counters = {"records_parsed": 0, "records_rejected": 0, "tasks": 0}
 
@@ -90,8 +93,8 @@ class Engine:
     def run(self) -> None:
         s = self.settings
         log.info(
-            "processor started: input=%s output=%s workers=%d sources configured=%s",
-            s.input_dir, s.output_dir, self.workers, sorted(self.sources_cfg.value.sources),
+            "processor started: input=%s output=%s workers=%d timezone=%s sources configured=%s",
+            s.input_dir, s.output_dir, self.workers, s.timezone, sorted(self.sources_cfg.value.sources),
         )
         self.watcher.start()
         self._start_pool()
@@ -404,10 +407,10 @@ class Engine:
             "parser_options": src.parser_options or None,
             "mapping": mapping,
             "auto_detected": not src.configured,
-            "first_seen_at": iso(src.first_seen),
-            "last_seen_at": iso(src.last_seen),
-            "last_data_at": iso(src.last_data_at),
-            "inactive_since": iso(src.inactive_since),
+            "first_seen_at": self.tf.iso(src.first_seen),
+            "last_seen_at": self.tf.iso(src.last_seen),
+            "last_data_at": self.tf.iso(src.last_data_at),
+            "inactive_since": self.tf.iso(src.inactive_since),
         }
 
     def _write_source(self, src: SourceState, now: float) -> None:
@@ -426,6 +429,8 @@ class Engine:
             timeseries_minutes=s.timeseries_minutes,
             max_clients=s.max_clients_in_output,
             source_meta=self._source_meta(src),
+            tf=self.tf,
+            display_timezone=s.timezone,
             processing={
                 "files_tracked": src.files,
                 "records_parsed": src.records,
@@ -449,7 +454,7 @@ class Engine:
                     "records_rejected": src.rejected,
                     "parser": src.parser,
                     "auto_detected": not src.configured,
-                    "last_data_at": iso(src.last_data_at),
+                    "last_data_at": self.tf.iso(src.last_data_at),
                     "lag_ms": src.lag_ms,
                 }
             )
@@ -465,6 +470,8 @@ class Engine:
             timeseries_minutes=s.timeseries_minutes,
             max_clients=s.max_clients_in_output,
             source_meta=None,
+            tf=self.tf,
+            display_timezone=s.timezone,
             processing={
                 "files_tracked": len(self.files),
                 "records_parsed": self.counters["records_parsed"],
@@ -480,7 +487,7 @@ class Engine:
         out = Path(self.settings.output_dir)
         src_dir = out / name
         if src_dir.exists():
-            dest = out / "_archive" / f"{name}-{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}"
+            dest = out / "_archive" / f"{name}-{self.tf.stamp(time.time())}"
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src_dir), str(dest))
         log.info("archived outputs of inactive source %s", name)
@@ -514,6 +521,7 @@ class Engine:
         self.global_stats = data["global_stats"]
         self.limiter = data["limiter"]
         self.limiter.warning_ratio = self.settings.warning_ratio
+        self.limiter.tf = self.tf
         self.limiter.set_limits(self.limits_cfg.value)
         self.counters.update(data["counters"])
         self.errors.written = data["errors_written"]

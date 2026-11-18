@@ -8,6 +8,13 @@ sources_file: config/sources.yaml   # formats + field mappings (hot-reloaded)
 limits_file: config/limits.json     # rate limits (hot-reloaded)
 plugins_dir: plugins        # drop-in parser plugins (*.py), loaded at startup
 
+# Display timezone (IANA name, e.g. Asia/Kolkata, Europe/London, UTC).
+# Everything is stored in UTC (insights.json, checkpoints); this zone is used only for display:
+# the dashboard converts every time to it, and processor log lines are printed in it.
+# Reading input logs is unaffected: naive input timestamps use the per-field `tz` in
+# sources.yaml (default UTC).
+timezone: Asia/Kolkata
+
 tick_seconds: 1.0           # how often insights files are refreshed
 reconcile_seconds: 2.0      # full directory rescan (safety net for missed inotify events)
 checkpoint_seconds: 5.0

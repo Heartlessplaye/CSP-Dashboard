@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import heapq
-import math
 import os
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -14,15 +12,10 @@ import orjson
 
 from .metrics import SourceStats
 from .ratelimit import RateLimiter
+from .timefmt import TimeFormat
 
 SCHEMA_VERSION = "1.0"
 GLOBAL = "_global"
-
-
-def iso(ts: float | None) -> str | None:
-    if ts is None or not math.isfinite(ts) or ts <= 0:
-        return None
-    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def write_json_atomic(path: Path, obj: Any) -> None:
@@ -55,8 +48,11 @@ def build_insights(
     max_clients: int,
     source_meta: dict[str, Any] | None,
     processing: dict[str, Any],
+    tf: TimeFormat,
+    display_timezone: str,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    iso = tf.iso
     total = stats.requests
     clients_map = stats.clients
 
@@ -87,6 +83,7 @@ def build_insights(
         "schema_version": SCHEMA_VERSION,
         "source": source,
         "status": status,
+        "display_timezone": display_timezone,  # timestamps below are UTC; viewers convert for display
         "generated_at": iso(now),
         "watermark": iso(watermark),
         "source_meta": source_meta,

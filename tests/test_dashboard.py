@@ -32,3 +32,4 @@ def test_dashboard_before_any_output(tmp_path, monkeypatch):
     assert client.get("/api/global").status_code == 404
     assert client.get("/api/sources").json() == []
     assert client.get("/healthz").json()["ok"] is False
+watchdogwatchdog

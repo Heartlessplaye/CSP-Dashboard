@@ -238,7 +238,7 @@
       <section class="card" aria-labelledby="ts-title">
         <div class="card-head">
           <h2 id="ts-title">Requests per minute</h2>
-          <span class="hint">last 60 min of event time · UTC</span>
+          <span class="hint" id="ts-hint">last 60 min of event time</span>
         </div>
         <div class="chart" id="ts-chart"></div>
         <details class="table-view"><summary>Show as table</summary><div class="tbl-wrap" id="ts-table"></div></details>
@@ -330,7 +330,38 @@
   const fmtCompact = (n) => (n == null ? "–" : n < 10000 ? nf.format(n) : nfc.format(n));
   const fmtMs = (n) => (n == null ? "–" : n >= 1000 ? (n / 1000).toFixed(2) + " s" : Math.round(n) + " ms");
   const fmtPct = (x) => (x == null ? "–" : (x * 100).toFixed(x < 0.1 ? 1 : 0) + "%");
-  const hhmm = (iso) => (iso ? iso.slice(11, 16) : "");
+  // ---- time display: insights store UTC; every timestamp is converted for display to the
+  // zone configured in settings.yaml (insights files carry it as `display_timezone`).
+  let TZ = "UTC";
+  const dtfCache = new Map();
+  function dtf(opts) {
+    const key = TZ + JSON.stringify(opts);
+    if (!dtfCache.has(key)) {
+      let f;
+      try { f = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hourCycle: "h23", ...opts }); }
+      catch (_) { f = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", hourCycle: "h23", ...opts }); }
+      dtfCache.set(key, f);
+    }
+    return dtfCache.get(key);
+  }
+  function tparts(iso) {
+    const o = {};
+    for (const p of dtf({ year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      .formatToParts(new Date(iso))) o[p.type] = p.value;
+    return o;
+  }
+  const hhmm = (iso) => { if (!iso) return ""; const p = tparts(iso); return `${p.hour}:${p.minute}`; };
+  const hms = (iso) => { if (!iso) return ""; const p = tparts(iso); return `${p.hour}:${p.minute}:${p.second}`; };
+  const dateTime = (iso, secs) => {
+    if (!iso) return "–";
+    const p = tparts(iso);
+    return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}` + (secs ? `:${p.second}` : "");
+  };
+  function tzShort() {
+    const part = dtf({ timeZoneName: "short" }).formatToParts(new Date()).find((x) => x.type === "timeZoneName");
+    return part ? part.value : TZ;
+  }
+  const tzLabel = () => (TZ === "UTC" ? "UTC" : `${TZ} (${tzShort()})`);
   const fmtWindow = (s) => (s >= 3600 && s % 3600 === 0 ? s / 3600 + " h" : s >= 60 && s % 60 === 0 ? s / 60 + " min" : s + " s");
   function ago(iso) {
     if (!iso) return "never";
@@ -457,7 +488,7 @@
       hdot.setAttribute("cx", cx); hdot.setAttribute("cy", cy); hdot.setAttribute("visibility", "visible");
       clear(tip).append(
         el("div", { class: "tv" }, fmtInt(vals[cur])),
-        el("div", { class: "tk" }, el("i"), "requests · " + hhmm(points[cur][0]) + " UTC"),
+        el("div", { class: "tk" }, el("i"), "requests · " + hhmm(points[cur][0]) + " " + tzShort()),
       );
       const scale = container.clientWidth / W;
       const left = cx * scale;
@@ -590,7 +621,7 @@
 
     $("k-requests").textContent = fmtInt(t.requests);
     $("k-range").textContent = t.first_event_at
-      ? `events ${t.first_event_at.replace("T", " ").slice(0, 16)} → ${t.last_event_at.replace("T", " ").slice(0, 16)} UTC`
+      ? `events ${dateTime(t.first_event_at)} → ${dateTime(t.last_event_at)} ${tzShort()}`
       : "no events yet";
     $("k-clients").textContent = fmtCompact(t.clients);
     $("k-clients-note").textContent = doc.source === GLOBAL ? `${(doc.sources || []).length} sources` : (doc.status === "inactive" ? "source inactive" : "in this source");
@@ -601,7 +632,8 @@
 
     renderLine($("ts-chart"), (doc.timeseries && doc.timeseries.requests) || []);
     const series = (doc.timeseries && doc.timeseries.requests) || [];
-    simpleTable($("ts-table"), ["Minute (UTC)", "Requests"], series.filter((r) => r[1]).map((r) => [r[0].replace("T", " ").slice(0, 16), fmtInt(r[1])]), [false, true]);
+    $("ts-hint").textContent = `last 60 min of event time · ${tzLabel()}`;
+    simpleTable($("ts-table"), [`Minute (${tzShort()})`, "Requests"], series.filter((r) => r[1]).map((r) => [dateTime(r[0]), fmtInt(r[1])]), [false, true]);
     renderBars($("ep-bars"), doc.top_endpoints || []);
     simpleTable($("ep-table"), ["Endpoint", "Requests", "Share"], (doc.top_endpoints || []).map((r) => [r.endpoint, fmtInt(r.count), fmtPct(r.share)]), [false, true, true]);
 
@@ -613,7 +645,7 @@
       vl.append(el("div", { class: "viol" },
         pill("EXCEEDED"), el("span", { class: "who" }, v.client_id),
         el("span", { class: "meta" }, `${fmtInt(v.current)} requests vs limit ${fmtInt(v.limit)} per ${fmtWindow(v.window_seconds)} (${fmtPct(v.utilization)})`),
-        el("span", { class: "meta" }, v.since ? "since " + v.since.replace("T", " ").slice(0, 19) + " UTC" : ""),
+        el("span", { class: "meta" }, v.since ? `since ${dateTime(v.since, true)} ${tzShort()}` : ""),
       ));
     }
 
@@ -640,9 +672,9 @@
       add("Options", meta.parser_options ? JSON.stringify(meta.parser_options) : "–");
       add("Files tracked", fmtInt(p.files_tracked));
       add("Records rejected", fmtInt(p.records_rejected));
-      add("First seen", (meta.first_seen_at || "–").replace("T", " "));
+      add("First seen", `${dateTime(meta.first_seen_at, true)} ${tzShort()}`);
       add("Last data", ago(meta.last_data_at));
-      if (meta.inactive_since) add("Inactive since", meta.inactive_since.replace("T", " "));
+      if (meta.inactive_since) add("Inactive since", `${dateTime(meta.inactive_since, true)} ${tzShort()}`);
       const mapping = meta.mapping || {};
       simpleTable($("mapping-table"), ["Internal field", "Source field", "Transform"],
         Object.entries(mapping).map(([k, v]) => {
@@ -673,10 +705,11 @@
       ]);
       state.sources = sources;
       state.doc = doc;
+      if (doc.display_timezone && doc.display_timezone !== TZ) { TZ = doc.display_timezone; dtfCache.clear(); }
       banner.classList.remove("show");
       const age = (Date.now() - Date.parse(doc.generated_at)) / 1000;
       live.className = "live" + (age > 15 ? " stale" : "");
-      $("live-text").textContent = `Updated ${ago(doc.generated_at)}` + (doc.watermark ? ` · events up to ${doc.watermark.slice(11, 19)} UTC` : "");
+      $("live-text").textContent = `Updated ${ago(doc.generated_at)}` + (doc.watermark ? ` · events up to ${hms(doc.watermark)} ${tzShort()}` : "");
       renderFilters();
       render();
     } catch (err) {

@@ -14,11 +14,11 @@ This module flags clients; it does not block traffic.
 
 from __future__ import annotations
 
-import math
 from array import array
 from typing import Any
 
 from .config import LimitsConfig
+from .timefmt import TimeFormat
 
 BUCKETS = 60
 OK, WARNING, EXCEEDED, NO_LIMIT = "OK", "WARNING", "EXCEEDED", "NO_LIMIT"
@@ -114,6 +114,7 @@ class RateLimiter:
         self.windows: dict[str, ClientWindow] = {}
         self.active: set[str] = set()  # clients with a non-empty window
         self.watermark = 0.0
+        self.tf = TimeFormat("UTC")  # display zone; set by the engine from settings
 
     # ----------------------------------------------------------------- config
     def set_limits(self, limits: LimitsConfig) -> None:
@@ -185,8 +186,8 @@ class RateLimiter:
             "utilization": round(w.current / w.limit, 4) if w.limit else None,
             "status": w.status,
             "peak": w.peak,
-            "exceeded_since": _iso(w.exceeded_since),
-            "last_exceeded_at": _iso(w.last_exceeded_at),
+            "exceeded_since": self.tf.iso(w.exceeded_since),
+            "last_exceeded_at": self.tf.iso(w.last_exceeded_at),
         }
 
     def violations(self, only: set[str] | dict | None = None) -> list[dict[str, Any]]:
@@ -202,7 +203,7 @@ class RateLimiter:
                     "limit": w.limit,
                     "window_seconds": w.window,
                     "utilization": round(w.current / w.limit, 4) if w.limit else None,
-                    "since": _iso(w.exceeded_since),
+                    "since": self.tf.iso(w.exceeded_since),
                 }
             )
         out.sort(key=lambda v: v["utilization"] or 0, reverse=True)
@@ -211,16 +212,11 @@ class RateLimiter:
     def __getstate__(self):
         state = self.__dict__.copy()
         state.pop("limits", None)  # always re-read from limits.json
+        state.pop("tf", None)  # always taken from settings
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.limits = LimitsConfig()
+        self.tf = TimeFormat("UTC")
 
-
-def _iso(ts: float | None) -> str | None:
-    if ts is None or not math.isfinite(ts):
-        return None
-    from datetime import datetime, timezone
-
-    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

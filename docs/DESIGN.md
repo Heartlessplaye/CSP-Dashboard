@@ -111,6 +111,21 @@ Mapping rules:
 - **Reloads.** A reload that changes a client's window size restarts that client's window. A reload that
   only changes the limit re-evaluates it immediately.
 
+## Time handling
+
+- **Internally**, every time is epoch seconds (UTC): parsing, buckets, the watermark and checkpoints.
+- **Parsing input.** Input timestamps carrying an offset or `Z` are exact. Naive ones use the per-field
+  `tz` in `sources.yaml` (default UTC), which describes the *source*, not the viewer.
+- **Storage is UTC.** Insights strings are ISO 8601 UTC (`…Z`); checkpoints hold epoch seconds; archive
+  folder names use UTC.
+- **Display.** `settings.timezone` is display-only:
+  - each insights file names it in `display_timezone`;
+  - the dashboard converts with `Intl.DateTimeFormat({timeZone})`, so it needs no setting of its own and
+    stays DST-correct;
+  - processor logs use `ZoneFormatter`, with the offset shown.
+- **Minute buckets** are aligned to the epoch minute. They line up with local minutes in every zone,
+  because all offsets in use are whole minutes.
+
 ## Output and checkpoints
 
 - **Insights writes.** Insights are rebuilt only for sources whose data or clients' limit status changed.

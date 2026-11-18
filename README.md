@@ -110,7 +110,8 @@ across all sources, plus a `sources` list:
   "schema_version": "1.0",
   "source": "EdgeServer",
   "status": "active",                 // "inactive" once its folder disappears
-  "generated_at": "…", "watermark": "…",
+  "display_timezone": "Asia/Kolkata",  // settings.yaml `timezone`; all timestamps here are UTC
+  "generated_at": "2025-04-04T10:00:07Z", "watermark": "2025-04-04T10:00:06Z",
   "source_meta": { "parser": "json", "mapping": { "client_id": "api_key", … }, "auto_detected": false },
   "totals": { "requests": 1209, "clients": 268, "avg_latency_ms": 161.4, "error_rate": 0.07 },
   "top_endpoints": [ { "endpoint": "/v1/users", "count": 371, "share": 0.31 } ],
@@ -137,6 +138,17 @@ across all sources, plus a `sources` list:
 All processor settings are in [config/settings.yaml](config/settings.yaml): directories, tick and scan
 intervals, worker count, the output client cap, the inactive-source TTL, and ignore patterns. The defaults
 match the problem's 5 s requirement with a wide margin.
+
+**Timezone.** Everything is **stored in UTC**: `insights.json` (`…Z` timestamps), checkpoints and
+archive folder names. `timezone: Asia/Kolkata` (any IANA name, or `UTC`) is **for display only**:
+
+- The dashboard converts every time to that zone, using `display_timezone` from the insights files, so it
+  needs no setting of its own.
+- Processor log lines are printed in that zone, with the offset (`+0530`).
+
+An invalid name stops the processor at startup with a clear error. Restart the processor after changing
+it. The setting does not change how input logs are read: timestamps without an offset are interpreted
+with the per-field `tz` in `sources.yaml` (default UTC).
 
 ## Development
 

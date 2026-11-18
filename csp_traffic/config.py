@@ -29,6 +29,8 @@ class Settings(BaseModel):
     limits_file: Path = Path("config/limits.json")
     plugins_dir: Path | None = Path("plugins")
 
+    timezone: str = "UTC"  # display-only IANA zone (dashboard, logs); stored timestamps stay UTC
+
     tick_seconds: float = 1.0
     reconcile_seconds: float = 2.0
     checkpoint_seconds: float = 5.0
@@ -48,6 +50,14 @@ class Settings(BaseModel):
     inactive_ttl_seconds: float = 86400.0
 
     ignore_patterns: list[str] = Field(default_factory=lambda: [".*", "*.tmp", "*.part", "*.swp", "*~"])
+
+    @field_validator("timezone")
+    @classmethod
+    def _check_timezone(cls, v: str) -> str:
+        from .timefmt import load_zone
+
+        load_zone(v)
+        return v
 
     def effective_workers(self) -> int:
         if self.workers > 0:
